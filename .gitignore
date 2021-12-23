@@ -17,4 +17,7 @@ debug
 *.diff
 .vs
 
+cscope.files
+cscope.out
+
 _tiltbuild

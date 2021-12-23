@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	regionKey = "region"
+	regionKey    = "region"
 	ebsCSIDriver = "ebs.csi.aws.com"
 )
 
@@ -45,6 +45,8 @@ const (
 // be captured during snapshot and provided when creating a new volume
 // from snapshot.
 var iopsVolumeTypes = sets.NewString("io1")
+
+// zhou: implement velero/pkg/plugin/velero/volume_snapshotter.go "VolumeSnapshotter interface".
 
 type VolumeSnapshotter struct {
 	log logrus.FieldLogger
@@ -77,7 +79,7 @@ func (b *VolumeSnapshotter) Init(config map[string]string) error {
 	credentialProfile := config[credentialProfileKey]
 	credentialsFile := config[credentialsFileKey]
 	enableSharedConfig := config[enableSharedConfigKey]
-
+	nn
 	if region == "" {
 		return errors.Errorf("missing %s in aws configuration", regionKey)
 	}
@@ -141,6 +143,9 @@ func (b *VolumeSnapshotter) CreateVolumeFromSnapshot(snapshotID, volumeType, vol
 	return *res.VolumeId, nil
 }
 
+// zhou: "GetVolumeInfo returns the type and IOPS (if using provisioned IOPS) for
+//        the specified volume in the given availability zone."
+
 func (b *VolumeSnapshotter) GetVolumeInfo(volumeID, volumeAZ string) (string, *int64, error) {
 	volumeInfo, err := b.describeVolume(volumeID)
 	if err != nil {
@@ -178,6 +183,9 @@ func (b *VolumeSnapshotter) describeVolume(volumeID string) (*ec2.Volume, error)
 
 	return res.Volumes[0], nil
 }
+
+// zhou: "CreateSnapshot creates a snapshot of the specified volume, and applies the provided
+//        set of tags to the snapshot."
 
 func (b *VolumeSnapshotter) CreateSnapshot(volumeID, volumeAZ string, tags map[string]string) (string, error) {
 	// describe the volume so we can copy its tags to the snapshot
@@ -273,11 +281,15 @@ func (b *VolumeSnapshotter) DeleteSnapshot(snapshotID string) error {
 
 var ebsVolumeIDRegex = regexp.MustCompile("vol-.*")
 
+// zhou: "GetVolumeID returns the cloud provider specific identifier for the PersistentVolume."
+
 func (b *VolumeSnapshotter) GetVolumeID(unstructuredPV runtime.Unstructured) (string, error) {
 	pv := new(v1.PersistentVolume)
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredPV.UnstructuredContent(), pv); err != nil {
 		return "", errors.WithStack(err)
 	}
+
+	// zhou: PV either provisioned via CSI or EBS buildin volume plugin.
 	if pv.Spec.CSI != nil {
 		driver := pv.Spec.CSI.Driver
 		if driver == ebsCSIDriver {
@@ -305,6 +317,7 @@ func (b *VolumeSnapshotter) SetVolumeID(unstructuredPV runtime.Unstructured, vol
 		// PV is provisioned by CSI driver
 		driver := pv.Spec.CSI.Driver
 		if driver == ebsCSIDriver {
+			// zhou:
 			pv.Spec.CSI.VolumeHandle = volumeID
 		} else {
 			return nil, fmt.Errorf("unable to handle CSI driver: %s", driver)

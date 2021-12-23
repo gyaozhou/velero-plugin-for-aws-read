@@ -85,7 +85,12 @@ func isValidSignatureVersion(signatureVersion string) bool {
 	return false
 }
 
+// zhou: "Init prepares the ObjectStore for usage using the provided map of
+//        configuration key-value pairs. It returns an error if the ObjectStore
+//        cannot be initialized from the provided config."
+
 func (o *ObjectStore) Init(config map[string]string) error {
+	// zhou: validate that "config" only includes the key which this plugin supports.
 	if err := veleroplugin.ValidateObjectStoreConfigKeys(config,
 		regionKey,
 		s3URLKey,
@@ -173,6 +178,7 @@ func (o *ObjectStore) Init(config map[string]string) error {
 		}
 	}
 
+	// zhou: "credentialsFile" using the aws credential file format, same as restic using.
 	sessionOptions, err := newSessionOptions(*serverConfig, credentialProfile, caCert, credentialsFile, enableSharedConfig)
 	if err != nil {
 		return err
@@ -271,6 +277,9 @@ func newAWSConfig(url, region string, forcePathStyle bool) (*aws.Config, error) 
 	return awsConfig, nil
 }
 
+// zhou: "PutObject creates a new object using the data in body within the specified
+//        object storage bucket with the given key."
+
 func (o *ObjectStore) PutObject(bucket, key string, body io.Reader) error {
 	req := &s3manager.UploadInput{
 		Bucket: &bucket,
@@ -296,6 +305,8 @@ func (o *ObjectStore) PutObject(bucket, key string, body io.Reader) error {
 
 const notFoundCode = "NotFound"
 
+// zhou: "ObjectExists checks if there is an object with the given key in the object storage bucket."
+
 // ObjectExists checks if there is an object with the given key in the object storage bucket.
 func (o *ObjectStore) ObjectExists(bucket, key string) (bool, error) {
 	log := o.log.WithFields(
@@ -311,7 +322,7 @@ func (o *ObjectStore) ObjectExists(bucket, key string) (bool, error) {
 	}
 
 	log.Debug("Checking if object exists")
-	if _, err := o.s3.HeadObject(req); err != nil {
+	if head, err := o.s3.HeadObject(req); err != nil {
 		log.Debug("Checking for AWS specific error information")
 		if aerr, ok := err.(awserr.Error); ok {
 			log.WithFields(
@@ -330,11 +341,16 @@ func (o *ObjectStore) ObjectExists(bucket, key string) (bool, error) {
 			}
 		}
 		return false, errors.WithStack(err)
+	} else {
+		log.Info("========== Object head: ", *head.ContentLength)
 	}
 
 	log.Debug("Object exists")
 	return true, nil
 }
+
+// zhou: "GetObject retrieves the object with the given key from the specified
+//        bucket in object storage."
 
 func (o *ObjectStore) GetObject(bucket, key string) (io.ReadCloser, error) {
 	req := &s3.GetObjectInput{
@@ -349,6 +365,9 @@ func (o *ObjectStore) GetObject(bucket, key string) (io.ReadCloser, error) {
 
 	return res.Body, nil
 }
+
+// zhou: "ListCommonPrefixes gets a list of all object key prefixes that start with
+//        the specified prefix and stop at the next instance of the provided delimiter."
 
 func (o *ObjectStore) ListCommonPrefixes(bucket, prefix, delimiter string) ([]string, error) {
 	req := &s3.ListObjectsV2Input{
@@ -370,6 +389,9 @@ func (o *ObjectStore) ListCommonPrefixes(bucket, prefix, delimiter string) ([]st
 
 	return ret, nil
 }
+
+// zhou: "ListObjects gets a list of all keys in the specified bucket
+//        that have the given prefix."
 
 func (o *ObjectStore) ListObjects(bucket, prefix string) ([]string, error) {
 	req := &s3.ListObjectsV2Input{
@@ -397,6 +419,9 @@ func (o *ObjectStore) ListObjects(bucket, prefix string) ([]string, error) {
 	return ret, nil
 }
 
+// zhou: "DeleteObject removes the object with the specified key from the given
+//        bucket."
+
 func (o *ObjectStore) DeleteObject(bucket, key string) error {
 	req := &s3.DeleteObjectInput{
 		Bucket: &bucket,
@@ -407,6 +432,8 @@ func (o *ObjectStore) DeleteObject(bucket, key string) error {
 
 	return errors.Wrapf(err, "error deleting object %s", key)
 }
+
+// zhou: "CreateSignedURL creates a pre-signed URL for the given bucket and key that expires after ttl."
 
 func (o *ObjectStore) CreateSignedURL(bucket, key string, ttl time.Duration) (string, error) {
 	req, _ := o.preSignS3.GetObjectRequest(&s3.GetObjectInput{
